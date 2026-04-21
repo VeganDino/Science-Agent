@@ -1,4 +1,4 @@
-"""KG-informed planning tool — KG DFDTS is mandatory, intent templates are hints only."""
+"""KG-informed planning tool — KG BFDTS is mandatory, intent templates are hints only."""
 from langchain_core.tools import tool
 
 
@@ -42,7 +42,7 @@ _DOMAIN_SIGNALS = {
 }
 
 # Maps (domain, intent) → shortcut tool steps.
-# These are HINTS only — KG DFDTS is always the primary source.
+# These are HINTS only — KG BFDTS is always the primary source.
 _INTENT_HINTS = {
     ("chemistry", "drug-likeness"): {
         "triggers": ["lipinski", "drug-like", "admet", "rule of 5", "ro5"],
@@ -161,7 +161,7 @@ _DOMAIN_GENERIC = {
 }
 
 # Queries that are conceptual/reasoning — KG data-transformation chains don't apply.
-# For these, the plan skips DFDTS and goes straight to literature + agent tools.
+# For these, the plan skips BFDTS and goes straight to literature + agent tools.
 _CONCEPTUAL_SIGNALS = [
     "hypothes", "explain", "mechanism", "cause", "why ", "evidence",
     "review", "discuss", "debate", "theory", "understand", "reasoning",
@@ -186,17 +186,38 @@ def _is_conceptual(kw: str) -> bool:
 def make_science_plan(goal: str) -> str:
     """Build a structured execution plan by consulting the Tool Knowledge Graph and GYM index.
 
-    Call this FIRST before executing any tools. KG DFDTS is always consulted.
+    Call this FIRST before executing any tools. KG BFDTS is always consulted.
     Returns a step-by-step plan with tool chains from the KG graph plus GYM functions.
 
     goal: plain-English description of what you want to achieve
     """
     from tools.kg_planner import (
         search_tools_by_description,
-        dfdts_tool_chain,
+        bfdts_tool_chain,
         describe_decision_tree,
+        decision_tree_to_dict,
         _build_indices,
     )
+    from tools._bfdts_trace import set_trace
+
+    _, _type_to_tools, _tool_to_outputs = _build_indices()
+
+    def _chain_steps(chain, start_type, end_type):
+        """Annotate each hop with its concrete input/output type."""
+        steps = []
+        current = start_type
+        for tool in chain:
+            outputs = _tool_to_outputs.get(tool, [])
+            # Prefer the target type if this tool produces it; else first output.
+            if end_type in outputs:
+                out = end_type
+            elif outputs:
+                out = outputs[0]
+            else:
+                out = ""
+            steps.append({"tool": tool, "input_type": current, "output_type": out})
+            current = out
+        return steps
     from tools.gym_tools import _build_gym_index
 
     kw = goal.lower()
@@ -225,7 +246,7 @@ def make_science_plan(goal: str) -> str:
         f"**Intent**: {', '.join(i for i, _ in all_intents) or 'general'}\n"
     )
 
-    # ── 2. KG DFDTS ───────────────────────────────────────────────────────────
+    # ── 2. KG BFDTS ───────────────────────────────────────────────────────────
     tool_info, _, _ = _build_indices()
     conceptual = _is_conceptual(kw)
 
@@ -241,10 +262,11 @@ def make_science_plan(goal: str) -> str:
                     return True
         return False
 
-    kg_chains = []
+    # Each item: (start_type, end_type, chain_list, tree)
+    kg_chain_candidates: list[tuple[str, str, list[str], object]] = []
     seen_chain_key: set[tuple] = set()
 
-    sections.append("### Step 1 — KG DFDTS")
+    sections.append("### Step 1 — KG BFDTS")
 
     if conceptual:
         # Conceptual/reasoning queries have no KG data-transformation chains.
@@ -260,24 +282,68 @@ def make_science_plan(goal: str) -> str:
     else:
         for start, end, triggers in _KG_CHAIN_TEMPLATES:
             if _triggers_match(triggers):
-                solutions, tree = dfdts_tool_chain(start, end, max_depth=5, max_branches=3)
-                if solutions:
-                    chain_key = tuple(solutions[0])
+                solutions, tree = bfdts_tool_chain(start, end, max_depth=5, max_branches=3)
+                # BFS returns shortest-first; collect top-3 unique per template
+                for chain in solutions[:3]:
+                    chain_key = tuple(chain)
                     if chain_key not in seen_chain_key:
                         seen_chain_key.add(chain_key)
-                        kg_chains.append((start, end, solutions[0], tree))
+                        kg_chain_candidates.append((start, end, chain, tree))
 
-        if kg_chains:
-            sections.append("**Tool chains found:**")
-            for start, end, chain, _ in kg_chains[:4]:
-                sections.append("- `" + start + "` → `" + end + "`: " +
-                                 " → ".join(f"`{t}`" for t in chain))
-            start, end, chain, tree = kg_chains[0]
+        if kg_chain_candidates:
+            # Sort all candidates globally by chain length (shortest wins ties).
+            kg_chain_candidates.sort(key=lambda x: len(x[2]))
+            top_k = kg_chain_candidates[:3]
+
+            sections.append(
+                f"**Candidate chains (top {len(top_k)}, shortest first via BFDTS):**"
+            )
+            for i, (start, end, chain, _) in enumerate(top_k, 1):
+                sections.append(
+                    f"{i}. `{start}` → `{end}`  "
+                    f"({len(chain)} steps): " +
+                    " → ".join(f"`{t}`" for t in chain)
+                )
+
+            sections.append("")
+            sections.append("**Execution strategy — execute ALL listed chains, then pick the best:**")
+            sections.append(
+                "1. Run each candidate chain above to completion, sequentially.\n"
+                "2. Collect each chain's final output(s).\n"
+                "3. In your synthesis, report how results compare:\n"
+                "   - If chains agree (within tolerance) → **high confidence**, use the shortest chain's value.\n"
+                "   - If chains disagree → **flag the discrepancy**, prefer the shortest chain, and note which alternatives produced which values.\n"
+                "4. Cite the winning chain (by number above) in the final report."
+            )
+
+            # Decision tree for the shortest candidate
+            start, end, chain, tree = top_k[0]
             tree_str = describe_decision_tree(tree)
             if tree_str.strip():
-                sections.append(f"\n**Decision tree (`{start}` → `{end}`):**\n```")
+                sections.append(f"\n**Decision tree for chain #1 (`{start}` → `{end}`):**\n```")
                 sections.append(tree_str[:700])
                 sections.append("```")
+
+            # Side-channel trace for UI animation (not included in tool output string)
+            set_trace(
+                {
+                    "goal": goal,
+                    "start": start,
+                    "end": end,
+                    "tree": decision_tree_to_dict(tree),
+                    "candidates": [
+                        {
+                            "index": i + 1,
+                            "from": s,
+                            "to": e,
+                            "step_count": len(c),
+                            "tools": c,
+                            "steps": _chain_steps(c, s, e),
+                        }
+                        for i, (s, e, c, _) in enumerate(top_k)
+                    ],
+                }
+            )
         else:
             # KG keyword fallback
             domain_words = [w for w in words if w not in _DOMAIN_GENERIC]
@@ -299,7 +365,7 @@ def make_science_plan(goal: str) -> str:
                         kg_keyword_hits.append(r)
             kg_keyword_hits = kg_keyword_hits[:6]
             if kg_keyword_hits and primary_domain in {"chemistry", "biology", "materials"}:
-                sections.append("**KG keyword search (no DFDTS chain found):**")
+                sections.append("**KG keyword search (no BFDTS chain found):**")
                 for r in kg_keyword_hits:
                     inp = ", ".join(r.get("inputs", []))
                     out = ", ".join(r.get("outputs", []))
@@ -396,8 +462,8 @@ def make_science_plan(goal: str) -> str:
         if shortcut_steps:
             # Shortcuts exist → skip KG chain steps (they overlap with shortcuts)
             # Just reference KG as context, don't list as separate steps
-            if kg_chains:
-                kg_note = ", ".join(f"`{c[0]}`" for c in kg_chains[:2])
+            if kg_chain_candidates:
+                kg_note = ", ".join(f"`{c[0]}`" for c in kg_chain_candidates[:2])
                 sections.append(f"*(KG chains identified: {kg_note} — covered by shortcuts below)*")
             added: set[str] = set()
             for tool_name in shortcut_steps:
@@ -405,9 +471,9 @@ def make_science_plan(goal: str) -> str:
                     added.add(tool_name)
                     sections.append(f"{step}. `{tool_name}(...)`")
                     step += 1
-        elif kg_chains:
+        elif kg_chain_candidates:
             # No shortcuts → use KG chain steps directly
-            for start, end, chain, _ in kg_chains[:3]:
+            for start, end, chain, _ in kg_chain_candidates[:3]:
                 chain_str = " → ".join(f"`run_scitool('{t}', ...)`" for t in chain)
                 sections.append(f"{step}. [{start}→{end}]: {chain_str}")
                 step += 1

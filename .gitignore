@@ -1,4 +1,60 @@
-.vscode
-.env
+# ── Python ─────────────────────────────────────────────
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ── Virtualenvs / env ──────────────────────────────────
+.env
+.env.local
+.env.*.local
+.venv/
+venv/
+env/
+
+# ── Node / Next.js ─────────────────────────────────────
+node_modules/
+.next/
+out/
+build/
+.turbo/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Editor / OS ────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.claude/
+
+# ── Logs ───────────────────────────────────────────────
+*.log
+logs/
+
+# ── Sci-Agent runtime artifacts ────────────────────────
+# LangGraph SqliteSaver checkpointer (per-machine chat memory)
+sci-agent/memory.db
+sci-agent/memory.db-shm
+sci-agent/memory.db-wal
+
+# Uploaded files & generated outputs — keep directory, ignore contents
+sci-agent/workspace/*
+!sci-agent/workspace/.gitkeep
+
+# Downloaded arXiv / PDF test artifacts
+sci-agent/ToolsKG/TempFiles/
+
+# ── Secrets ────────────────────────────────────────────
+*.pem
+*.key
+secrets.json

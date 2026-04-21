@@ -72,7 +72,7 @@ def outputs_of_tool(tool_name: str) -> list[str]:
 
 @dataclass
 class DecisionNode:
-    """A node in the DFDTS decision tree."""
+    """A node in the BFDTS decision tree."""
     tool: str
     depth: int
     input_types: list
@@ -81,7 +81,7 @@ class DecisionNode:
     children: list = field(default_factory=list)  # alternative next-step tools
 
 
-def dfdts_tool_chain(
+def bfdts_tool_chain(
     start_input_type: str,
     target_output_type: str,
     max_depth: int = 5,
@@ -89,14 +89,14 @@ def dfdts_tool_chain(
     max_solutions: int = 8,
     exclude_security: bool = True,
 ) -> tuple[list[list[str]], Optional[DecisionNode]]:
-    """Depth-First Decision Tree Search through the KG.
+    """Breadth-First Decision Tree Search through the KG.
 
-    Explores tool chains depth-first: follows one path as deep as possible
-    before backtracking to try sibling branches.
+    Explores tool chains level by level — all depth-1 expansions before any
+    depth-2 — so the returned `solutions` are sorted **shortest first**.
 
     Returns:
         (solutions, decision_tree_root)
-        - solutions: list of complete tool chain paths reaching target
+        - solutions: list of complete tool chain paths, sorted shortest-first
         - decision_tree_root: DecisionNode tree showing all explored branches
     """
     tool_info, type_to_tools, tool_to_outputs = _build_indices()
@@ -113,9 +113,15 @@ def dfdts_tool_chain(
         output_types=[start_input_type],
     )
 
-    def dfs(current_types: frozenset, depth: int, path: list, visited: set, parent: DecisionNode):
+    # Queue items: (current_output_types, depth, path, visited_tools, parent_node)
+    queue: deque = deque()
+    queue.append((frozenset([start]), 0, [], frozenset(), root))
+
+    while queue:
+        current_types, depth, path, visited, parent = queue.popleft()
+
         if depth >= max_depth or len(solutions) >= max_solutions:
-            return
+            continue
 
         branches_tried = 0
         for t in sorted(current_types):
@@ -128,7 +134,6 @@ def dfdts_tool_chain(
                     break
 
                 new_outputs = frozenset(tool_to_outputs.get(tool, []))
-                info = tool_info.get(tool, {})
                 node = DecisionNode(
                     tool=tool,
                     depth=depth + 1,
@@ -142,15 +147,31 @@ def dfdts_tool_chain(
                 new_path = path + [tool]
                 if target in new_outputs:
                     solutions.append(new_path)
+                    if len(solutions) >= max_solutions:
+                        return solutions, root
                 else:
-                    # Depth-first: recurse before trying sibling tools
-                    dfs(new_outputs, depth + 1, new_path, visited | {tool}, node)
+                    queue.append(
+                        (new_outputs, depth + 1, new_path, visited | {tool}, node)
+                    )
 
-                if len(solutions) >= max_solutions:
-                    return
-
-    dfs(frozenset([start]), 0, [], set(), root)
     return solutions, root
+
+
+def decision_tree_to_dict(node: DecisionNode) -> dict:
+    """Plain-dict serialization of a DecisionNode tree for JSON transport.
+
+    Children order matches BFS expansion order (because we `append` each node
+    as BFS visits it), so a level-order traversal of the resulting tree
+    replays the original exploration.
+    """
+    return {
+        "tool": node.tool,
+        "depth": node.depth,
+        "input_types": node.input_types,
+        "output_types": node.output_types,
+        "is_solution": node.is_solution,
+        "children": [decision_tree_to_dict(c) for c in node.children],
+    }
 
 
 def describe_decision_tree(root: DecisionNode, indent: int = 0) -> str:

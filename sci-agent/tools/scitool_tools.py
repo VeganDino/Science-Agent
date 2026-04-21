@@ -227,27 +227,66 @@ def calculate_symmetry(structure: str) -> str:
 
 # ── OCR tool ─────────────────────────────────────────────────────────────────
 
-OCR_SERVICE_URL = "http://localhost:60004"
+import os as _os
+import json as _json
+
+OCR_SERVICE_URL = _os.environ.get("OCR_SERVICE_URL", "http://localhost:8788")
+_WORKSPACE_DIR = Path(__file__).parent.parent / "workspace"
+
+
+def _stringify_ocr_result(result) -> str:
+    """NemotronOCRV2 may return a string, list[str], list[dict], or nested dict.
+    Reduce to a readable string for the agent."""
+    if result is None:
+        return "(no result)"
+    if isinstance(result, str):
+        return result
+    if isinstance(result, list):
+        parts = []
+        for item in result:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                txt = item.get("text") or item.get("content")
+                parts.append(str(txt) if txt else _json.dumps(item, ensure_ascii=False))
+            else:
+                parts.append(str(item))
+        return "\n".join(parts) if parts else "(no text detected)"
+    if isinstance(result, dict):
+        txt = result.get("text") or result.get("content")
+        if txt:
+            return str(txt)
+        return _json.dumps(result, ensure_ascii=False)[:5000]
+    return str(result)
+
 
 @tool
-def ocr_image(image_path: str) -> str:
-    """Extract text from an image or PDF file using PaddleOCR-VL.
-    image_path: absolute path to an image file (png, jpg, pdf, etc.)
-    Returns the extracted text lines.
+def ocr_image(image_path: str, merge_level: str = "paragraph") -> str:
+    """Extract text from an image or PDF using the Nemotron OCR V2 service (English).
+
+    image_path: absolute path, or a filename inside sci-agent/workspace/.
+    merge_level: "line" | "paragraph" | "page" — granularity of the merged text.
+    Returns the extracted text.
     """
     import requests
     try:
-        with open(image_path, "rb") as f:
+        path = Path(image_path)
+        if not path.is_absolute():
+            path = _WORKSPACE_DIR / image_path
+        if not path.exists():
+            return f"OCR error: file not found at {path}"
+        with open(path, "rb") as f:
             resp = requests.post(
                 f"{OCR_SERVICE_URL}/ocr",
-                files={"file": (image_path.split("/")[-1], f)},
-                timeout=60,
+                files={"file": (path.name, f)},
+                data={"merge_level": merge_level},
+                timeout=120,
             )
+        resp.raise_for_status()
         data = resp.json()
         if "error" in data:
             return f"OCR error: {data['error']}"
-        texts = data.get("texts", [])
-        return "\n".join(texts) if texts else "(no text detected)"
+        return _stringify_ocr_result(data.get("result"))
     except Exception as e:
         return f"OCR service error: {e}"
 

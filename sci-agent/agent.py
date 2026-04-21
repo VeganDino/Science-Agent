@@ -2,10 +2,12 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
+import sqlite3
+
 from langchain_openai import ChatOpenAI
 from deepagents import create_deep_agent
 from deepagents.backends.utils import create_file_data
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.store.memory import InMemoryStore
 
 from tools.scitool_tools import SCIENCE_TOOLS
@@ -116,15 +118,24 @@ SUBAGENTS = [
         "name": "debate-agent",
         "description": "Orchestrate a scientific debate on a controversial or multi-hypothesis question by dynamically spawning opposing-perspective agents and synthesizing their arguments",
         "system_prompt": (
-            "You are a Scientific Debate Moderator.\n"
-            "When given a question with multiple competing explanations or hypotheses:\n"
-            "1. Identify 2-4 distinct scientific positions or hypotheses\n"
-            "2. For each position, use spawn_agent(role, task) to create a specialist who argues "
-            "   that position — e.g. spawn_agent('scientist arguing X hypothesis', task)\n"
-            "3. Collect all arguments and supporting evidence from each spawned agent\n"
-            "4. Present a structured debate: each position's strongest arguments, key evidence, "
-            "   and counterarguments\n"
-            "5. Synthesize: which position has the strongest current evidence and why\n"
+            "You are a Scientific Debate Moderator.\n\n"
+            "# MANDATORY PROTOCOL — do not deviate\n\n"
+            "You MUST follow these steps in order. Skipping or shortcutting will produce a broken debate.\n\n"
+            "Step 1 — Identify exactly **N distinct scientific positions** where 2 ≤ N ≤ 4.\n"
+            "  Write them down in your reasoning: 'Position A: …', 'Position B: …', …\n\n"
+            "Step 2 — **Call `spawn_agent` once PER position** — so you will make **at least 2, up to 4 spawn_agent tool calls**.\n"
+            "  Example for N=3:\n"
+            "    spawn_agent(role='scientist arguing Position A', task='<the user's question from A's angle>')\n"
+            "    spawn_agent(role='scientist arguing Position B', task='<the user's question from B's angle>')\n"
+            "    spawn_agent(role='scientist arguing Position C', task='<the user's question from C's angle>')\n"
+            "  HARD RULE: you MUST NOT write any analysis, debate summary, or final answer\n"
+            "  until every position has been sent to `spawn_agent` AND every spawned agent has returned.\n"
+            "  If you have only called spawn_agent once so far, your next action MUST be another spawn_agent call (not prose).\n\n"
+            "Step 3 — After ALL spawned agents return, present the debate:\n"
+            "  - each position's strongest arguments\n"
+            "  - key evidence for and against\n"
+            "  - counterarguments\n\n"
+            "Step 4 — Synthesize: which position has the strongest current evidence, and why.\n\n"
             "Be fair to all positions. Let evidence, not rhetoric, decide the winner."
         ),
         "tools": SCIENCE_TOOLS,
@@ -140,9 +151,17 @@ def get_agents_md_files() -> dict:
     return {}
 
 
+def _build_checkpointer() -> SqliteSaver:
+    # check_same_thread=False so FastAPI's thread-pool workers can share it.
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    saver = SqliteSaver(conn)
+    saver.setup()
+    return saver
+
+
 def create_science_agent():
     model = build_model()
-    checkpointer = MemorySaver()
+    checkpointer = _build_checkpointer()
     store = InMemoryStore()
 
     agent = create_deep_agent(
