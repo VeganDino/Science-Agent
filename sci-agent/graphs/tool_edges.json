@@ -1,0 +1,16 @@
+{
+  "edges": [
+    {"from": "pdf_reader", "to": "citation_checker", "relation": "validate_evidence"},
+    {"from": "smiles_validator", "to": "rdkit_descriptor", "relation": "compute_descriptors"},
+    {"from": "smiles_validator", "to": "molecular_weight", "relation": "compute_weight"},
+    {"from": "rdkit_descriptor", "to": "toxicity_checker", "relation": "safety_followup"},
+    {"from": "pubchem_lookup", "to": "smiles_validator", "relation": "get_smiles"},
+    {"from": "pubchem_lookup", "to": "rdkit_descriptor", "relation": "compute_descriptors"},
+    {"from": "python_exec", "to": "plot_generator", "relation": "visualize_result"},
+    {"from": "csv_loader", "to": "t_test", "relation": "statistical_test"},
+    {"from": "csv_loader", "to": "regression", "relation": "regression_analysis"},
+    {"from": "csv_loader", "to": "plot_generator", "relation": "visualize_data"},
+    {"from": "t_test", "to": "plot_generator", "relation": "visualize_result"},
+    {"from": "regression", "to": "plot_generator", "relation": "visualize_result"}
+  ]
+}

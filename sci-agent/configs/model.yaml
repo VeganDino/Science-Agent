@@ -1,0 +1,7 @@
+model_id: "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16"
+dtype: "bfloat16"
+device_map: "auto"
+max_new_tokens: 2048
+temperature: 0.2
+top_p: 0.9
+do_sample: true
