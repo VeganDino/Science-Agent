@@ -2,7 +2,7 @@
 
 > LLM-powered science research agent. Multi-domain (chemistry / biology / physics /
 > materials / astronomy / statistics) tool use over a knowledge graph,
-> BFDTS-based planning with live DAG visualization, native OCR,
+> BFSDT-based planning with live DAG visualization, native OCR,
 > and a ChatGPT-style UI with token-level streaming.
 
 Built on **NVIDIA Nemotron-3-Nano-30B** (via vLLM) with **DeepAgents + LangGraph**.
@@ -11,7 +11,7 @@ Built on **NVIDIA Nemotron-3-Nano-30B** (via vLLM) with **DeepAgents + LangGraph
 
 [![Sci-Agent live demo](https://img.youtube.com/vi/PnsOoCcNLiQ/maxresdefault.jpg)](https://youtu.be/PnsOoCcNLiQ)
 
-*Click to watch on YouTube — planner, BFDTS graph, tool execution, and streaming reasoning shown end-to-end.*
+*Click to watch on YouTube — planner, BFSDT graph, tool execution, and streaming reasoning shown end-to-end.*
 
 ---
 
@@ -21,13 +21,13 @@ Built on **NVIDIA Nemotron-3-Nano-30B** (via vLLM) with **DeepAgents + LangGraph
   (CoT streamed separately into a Planning panel)
 - 🔧 **1,900+ tools**
   functions, 11 domain shortcuts, plus Nemotron OCR V2 for images / PDFs
-- 📊 **BFDTS planning** — Breadth-First Decision Tree Search over the KG, always
+- 📊 **BFSDT planning** — Breadth-First Decision Tree Search over the KG, always
   executed before the agent sees the query, visualized live as a DAG in-UI
 - 🛠 **DeepAgents + LangGraph** — 7 predefined subagents (literature, compute,
   physics, experiment, hypothesis, critic, debate) plus runtime
   `spawn_agent(role, task)`; persistent memory via SqliteSaver
 - ⚡ **Token-level SSE streaming** — reasoning tokens → Planning panel,
-  content tokens → chat; tool calls, tool results, and BFDTS trace are
+  content tokens → chat; tool calls, tool results, and BFSDT trace are
   separate event types
 - 💾 **Persistence** — chats (incl. Plan/Tool/Graph history) in browser
   localStorage, agent memory (per-thread) in SQLite
@@ -51,7 +51,7 @@ Four processes share one box:
 
 ### Agent workflow
 
-The backend pre-runs `make_science_plan` (BFDTS over the Tool KG) for every
+The backend pre-runs `make_science_plan` (BFSDT over the Tool KG) for every
 user query, then lets Nemotron drive tool execution while streaming both
 reasoning and content tokens back to the UI.
 
@@ -300,7 +300,7 @@ llm-for-science/
 │   │   ├── api/chat/route.ts  # Streaming proxy (rewrites buffer SSE)
 │   │   └── globals.css
 │   ├── components/       # Sidebar, ChatInput, PlanPanel, ToolPanel,
-│   │                     # BfdtsGraph, Markdown, CopyButton, ...
+│   │                     # BfsdtGraph, Markdown, CopyButton, ...
 │   └── lib/              # api.ts, types.ts, persistence.ts, fileIcon.tsx, ...
 ├── tools/                # LangChain @tool wrappers
 │   ├── scitool_tools.py 
@@ -360,7 +360,7 @@ With file attachment (upload a PDF via the `+` button):
 ## Concurrent users
 
 **This setup is tuned for 1-2 concurrent users.** For a small group demo this is
-comfortable; vLLM handles the LLM side and the BFDTS trace side-channel is
+comfortable; vLLM handles the LLM side and the BFSDT trace side-channel is
 keyed by `thread_id` so simultaneous plans don't bleed into each other.
 
 To scale beyond 2:
@@ -391,7 +391,7 @@ The vLLM server needs `--served-model-name model` and `--enable-auto-tool-choice
 
 **Agent skips `make_science_plan`**
 The backend pre-runs the planner every turn and injects its output into the
-user message, so the KG / BFDTS trace is always populated regardless of Nemotron's tool-call compliance.
+user message, so the KG / BFSDT trace is always populated regardless of Nemotron's tool-call compliance.
 
 **Materials tools: `formula Field required` validation error**
 Fixed — all materials tools use the unified parameter name `formula`.
