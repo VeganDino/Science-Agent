@@ -13,6 +13,19 @@ Built on **NVIDIA Nemotron-3-Nano-30B** (via vLLM) with **DeepAgents + LangGraph
 
 *Click to watch on YouTube — planner, BFSDT graph, tool execution, and streaming reasoning shown end-to-end.*
 
+### Try it live
+
+👉 **[https://unwrapped-scorebook-retreat.ngrok-free.dev](https://unwrapped-scorebook-retreat.ngrok-free.dev)**
+
+Click **"Visit Site"** on the ngrok interstitial page to enter — that warning
+only appears once per browser. The full stack (frontend + backend + vLLM +
+Nemotron OCR) is served from a single GPU workstation tunneled through ngrok.
+
+> ⚠️ **Capacity: 1–2 concurrent users.** vLLM's `--max-num-seqs 8` saturates
+> quickly when multiple people query at once; the UI may stall or
+> token-stream slowly if more than 2 people are active at the same time.
+> For demo / benchmarking use only — not a public service.
+
 ---
 
 ## Features
