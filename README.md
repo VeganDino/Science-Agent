@@ -19,7 +19,7 @@ Built on **NVIDIA Nemotron-3-Nano-30B** (via vLLM) with **DeepAgents + LangGraph
 
 - 🧠 **Nemotron-3-Nano-30B** — 262K context, native tool calling, reasoning mode
   (CoT streamed separately into a Planning panel)
-- 🔧 **1,900+ tools** — 485 SciToolAgent KG tools, 1,414 SciAgentGYM Python
+- 🔧 **1,900+ tools**
   functions, 11 domain shortcuts, plus Nemotron OCR V2 for images / PDFs
 - 📊 **BFDTS planning** — Breadth-First Decision Tree Search over the KG, always
   executed before the agent sees the query, visualized live as a DAG in-UI
@@ -139,7 +139,7 @@ git clone https://github.com/suhyeong10/Science-Agent.git llm-for-science
 cd llm-for-science
 ```
 
-Vendored external code (SciToolAgent + SciAgentGYM) is already bundled under
+Vendored external code is already bundled under
 `vendor/`. No separate cloning needed.
 
 ### 2. Python backend
@@ -412,8 +412,6 @@ mode — dev mode has known concurrency issues.
 
 - [NVIDIA Nemotron-3-Nano-30B](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16) — base LLM
 - [NVIDIA Nemotron OCR V2](https://huggingface.co/nvidia/nemotron-ocr-v2) — OCR model
-- [SciToolAgent](https://github.com/SciToolAgent/SciToolAgent) — KG + chem / bio / materials tool functions
-- [SciAgentGYM](https://github.com/SciAgentGYM) — 1,414 physics / astronomy / statistics Python functions
 - [DeepAgents](https://github.com/langchain-ai/langgraph) · [LangGraph](https://langchain-ai.github.io/langgraph/) · [Next.js](https://nextjs.org/) · [Tailwind](https://tailwindcss.com/)
 
 Vendored external code under `vendor/` retains its original license — see each
